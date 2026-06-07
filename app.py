@@ -1,6 +1,6 @@
 import streamlit as st
 import time
-from agents import build_reader_agent, build_search_agent, writer_chain, critic_chain
+from agents import build_reader_agent, build_search_agent, generate_report
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -416,7 +416,7 @@ with col_pipeline:
     def s(step):
         if not r:
             return "waiting"
-        steps = ["search", "reader", "writer", "critic"]
+        steps = ["search", "reader", "writer"]
         idx = steps.index(step)
         completed = list(r.keys())
         # figure out which steps are done
@@ -432,7 +432,6 @@ with col_pipeline:
     step_card("01", "Search Agent",  s("search"), "Gathers recent web information")
     step_card("02", "Reader Agent",  s("reader"), "Scrapes & extracts deep content")
     step_card("03", "Writer Chain",  s("writer"), "Drafts the full research report")
-    step_card("04", "Critic Chain",  s("critic"), "Reviews & scores the report")
 
 
 # ── Run pipeline ──────────────────────────────────────────────────────────────
@@ -469,23 +468,13 @@ if st.session_state.running and not st.session_state.done:
         results["reader"] = rr
         st.session_state.results = dict(results)
 
-    # ── Step 3: Writer ──
+    # ── Step 3: Writer (1 Gemini call, offline fallback if quota exceeded) ──
     with st.spinner("✍️  Writer is drafting the report…"):
         research_combined = (
             f"SEARCH RESULTS:\n{results['search']}\n\n"
             f"DETAILED SCRAPED CONTENT:\n{results['reader']}"
         )
-        results["writer"] = writer_chain.invoke({
-            "topic": topic_val,
-            "research": research_combined
-        })
-        st.session_state.results = dict(results)
-
-    # ── Step 4: Critic ──
-    with st.spinner("🧐  Critic is reviewing the report…"):
-        results["critic"] = critic_chain.invoke({
-            "report": results["writer"]
-        })
+        results["writer"] = generate_report(topic_val, research_combined)
         st.session_state.results = dict(results)
 
     st.session_state.running = False
@@ -582,67 +571,6 @@ if r:
             file_name=f"research_report_{int(time.time())}.md",
             mime="text/markdown",
         )
-
-    # Critic feedback
-    if "critic" in r:
-        # Render critic feedback inside the feedback-panel with brighter styles
-        import html as _html
-
-        def _simple_md_to_html_local(md_text: str) -> str:
-            import re
-            lines = md_text.splitlines()
-            out = []
-            in_ul = False
-            in_ol = False
-            for raw in lines:
-                line = raw.rstrip()
-                if not line:
-                    if in_ul:
-                        out.append('</ul>')
-                        in_ul = False
-                    if in_ol:
-                        out.append('</ol>')
-                        in_ol = False
-                    continue
-                s = line.lstrip()
-                if s.startswith('###### '):
-                    out.append(f"<h6>{_html.escape(s[7:])}</h6>")
-                elif s.startswith('##### '):
-                    out.append(f"<h5>{_html.escape(s[6:])}</h5>")
-                elif s.startswith('#### '):
-                    out.append(f"<h4>{_html.escape(s[5:])}</h4>")
-                elif s.startswith('### '):
-                    out.append(f"<h3>{_html.escape(s[4:])}</h3>")
-                elif s.startswith('## '):
-                    out.append(f"<h2>{_html.escape(s[3:])}</h2>")
-                elif s.startswith('# '):
-                    out.append(f"<h1>{_html.escape(s[2:])}</h1>")
-                elif s.startswith('- ') or s.startswith('* '):
-                    if not in_ul:
-                        out.append('<ul>')
-                        in_ul = True
-                    out.append(f"<li>{_html.escape(s[2:]).strip()}</li>")
-                elif (m := re.match(r'^(\d+)\.\s+(.*)', s)):
-                    if not in_ol:
-                        out.append('<ol>')
-                        in_ol = True
-                    out.append(f"<li>{_html.escape(m.group(2)).strip()}</li>")
-                else:
-                    out.append(f"<p>{_html.escape(s)}</p>")
-            if in_ul:
-                out.append('</ul>')
-            if in_ol:
-                out.append('</ol>')
-            return '\n'.join(out)
-
-        critic_html = _simple_md_to_html_local(r["critic"]) if isinstance(r["critic"], str) else _html.escape(str(r["critic"]))
-        st.markdown(f"""
-        <div class="feedback-panel">
-            <div class="panel-label green">🧐 Critic Feedback</div>
-            <div class="feedback-markdown">{critic_html}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 st.markdown("""
