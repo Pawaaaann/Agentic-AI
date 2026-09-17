@@ -1,1 +1,20 @@
+# Secrets and local configuration
 .env
+
+# Python environments and build artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Application runtime data
+.cache/
+llm_cache.json
+
+# IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

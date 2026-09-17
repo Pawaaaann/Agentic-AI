@@ -1,580 +1,377 @@
-import streamlit as st
-import time
-from agents import build_reader_agent, build_search_agent, generate_report
+"""Streamlit entry point for ResearchMind - Production Multi-Agent Research System."""
 
-# ── Page config ──────────────────────────────────────────────────────────────
+from __future__ import annotations
+
+import json
+import os
+from urllib.parse import urlparse
+import streamlit as st
+
+from researchmind.pipeline import run_research_pipeline
+from researchmind.services import clear_cache
+
+# Page configuration
 st.set_page_config(
-    page_title="ResearchMind · AI Research Agent",
-    page_icon="🔬",
+    page_title="ResearchMind • Multi-Agent Autonomous AI Engine",
+    page_icon="⚡",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ────────────────────────────────────────────────────────────────
-st.markdown("""
+# Advanced CSS Design System
+st.markdown(
+    """<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
-
-/* ── Reset & base ── */
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-    color: #e8e4dc;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
-
-.stApp {
-    background: #0a0a0f;
-    background-image:
-        radial-gradient(ellipse 80% 50% at 20% -10%, rgba(255,140,50,0.12) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 40% at 80% 110%, rgba(255,80,30,0.08) 0%, transparent 55%);
+code, pre {
+    font-family: 'JetBrains Mono', monospace !important;
 }
-
-/* ── Hide default streamlit chrome ── */
-#MainMenu, footer, header { visibility: hidden; }
-.block-container { padding: 2rem 3rem 4rem; max-width: 1200px; }
-
-/* ── Hero header ── */
-.hero {
-    text-align: center;
-    padding: 3.5rem 0 2.5rem;
-    position: relative;
-}
-.hero-eyebrow {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    font-weight: 500;
-    letter-spacing: 0.25em;
-    text-transform: uppercase;
-    color: #ff8c32;
-    margin-bottom: 1rem;
-    opacity: 0.9;
-}
-.hero h1 {
-    font-family: 'Syne', sans-serif;
-    font-size: clamp(2.8rem, 6vw, 5rem);
-    font-weight: 800;
-    line-height: 1.0;
-    letter-spacing: -0.03em;
-    color: #f0ebe0;
-    margin: 0 0 1rem;
-}
-.hero h1 span {
-    color: #ff8c32;
-}
-.hero-sub {
-    font-size: 1.05rem;
-    font-weight: 300;
-    color: #a09890;
-    max-width: 520px;
-    margin: 0 auto;
-    line-height: 1.65;
-}
-
-/* ── Divider ── */
-.divider {
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,140,50,0.3), transparent);
-    margin: 2rem 0;
-}
-
-/* ── Input card ── */
-.input-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,140,50,0.15);
+.hero-container {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(124, 58, 237, 0.08) 100%);
+    border: 1px solid rgba(124, 58, 237, 0.2);
     border-radius: 16px;
     padding: 2rem 2.5rem;
     margin-bottom: 2rem;
-    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
 }
-
-/* ── Streamlit input overrides ── */
-.stTextInput > div > div > input {
-    background: rgba(255,255,255,0.05) !important;
-    border: 1px solid rgba(255,140,50,0.25) !important;
-    border-radius: 10px !important;
-    color: #000000 !important;
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 1rem !important;
-    padding: 0.75rem 1rem !important;
-    transition: border-color 0.2s, box-shadow 0.2s !important;
+.hero-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 50%, #db2777 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
 }
-.stTextInput > div > div > input:focus {
-    border-color: #ff8c32 !important;
-    box-shadow: 0 0 0 3px rgba(255,140,50,0.12) !important;
+.hero-subtitle {
+    font-size: 1.1rem;
+    color: #64748b;
+    margin-bottom: 1.25rem;
 }
-.stTextInput > label {
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.72rem !important;
-    letter-spacing: 0.15em !important;
-    text-transform: uppercase !important;
-    color: #ff8c32 !important;
-    font-weight: 500 !important;
-}
-
-/* ── Button ── */
-.stButton > button {
-    background: linear-gradient(135deg, #ff8c32 0%, #ff5a1a 100%) !important;
-    color: #0a0a0f !important;
-    font-family: 'Syne', sans-serif !important;
-    font-weight: 700 !important;
-    font-size: 0.95rem !important;
-    letter-spacing: 0.04em !important;
-    border: none !important;
-    border-radius: 10px !important;
-    padding: 0.7rem 2.2rem !important;
-    cursor: pointer !important;
-    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s !important;
-    box-shadow: 0 4px 20px rgba(255,140,50,0.3) !important;
-    width: 100%;
-}
-.stButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 28px rgba(255,140,50,0.4) !important;
-    opacity: 0.95 !important;
-}
-.stButton > button:active {
-    transform: translateY(0) !important;
-}
-
-/* ── Pipeline step cards ── */
-.step-card {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 14px;
-    padding: 1.5rem 1.8rem;
-    margin-bottom: 1.2rem;
-    position: relative;
-    overflow: hidden;
-    transition: border-color 0.3s;
-}
-.step-card.active {
-    border-color: rgba(255,140,50,0.4);
-    background: rgba(255,140,50,0.04);
-}
-.step-card.done {
-    border-color: rgba(80,200,120,0.3);
-    background: rgba(80,200,120,0.03);
-}
-.step-card::before {
-    content: '';
-    position: absolute;
-    left: 0; top: 0; bottom: 0;
-    width: 3px;
-    border-radius: 14px 0 0 14px;
-    background: rgba(255,255,255,0.05);
-    transition: background 0.3s;
-}
-.step-card.active::before { background: #ff8c32; }
-.step-card.done::before   { background: #50c878; }
-
-.step-header {
+.agent-pill-container {
     display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+.agent-pill {
+    display: inline-flex;
     align-items: center;
-    gap: 0.8rem;
-    margin-bottom: 0.3rem;
+    gap: 0.4rem;
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(203, 213, 225, 0.8);
+    border-radius: 9999px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #334155;
 }
-.step-num {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.68rem;
-    font-weight: 500;
-    letter-spacing: 0.15em;
-    color: #ff8c32;
-    opacity: 0.7;
-}
-.step-title {
-    font-family: 'Syne', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #f0ebe0;
-}
-.step-status {
-    margin-left: auto;
-    font-family: 'DM Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.1em;
-}
-.status-waiting  { color: #555; }
-.status-running  { color: #ff8c32; }
-.status-done     { color: #50c878; }
-
-/* ── Result panels ── */
-.result-panel {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.09);
+.metric-card-glow {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(226, 232, 240, 0.2);
     border-radius: 14px;
-    padding: 1.8rem 2rem;
-    margin-top: 1rem;
-    margin-bottom: 1.5rem;
-}
-.result-panel-title {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    font-weight: 500;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: #ff8c32;
-    margin-bottom: 1rem;
-    padding-bottom: 0.7rem;
-    border-bottom: 1px solid rgba(255,140,50,0.15);
-}
-.result-content {
-    font-size: 0.92rem;
-    line-height: 1.8;
-    color: #cdc8bf;
-    white-space: pre-wrap;
-    font-family: 'DM Sans', sans-serif;
-}
-
-/* ── Report & feedback panels ── */
-.report-panel {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,140,50,0.28);
-    border-radius: 16px;
-    padding: 2rem 2.5rem;
-    margin-top: 1rem;
-}
-.feedback-panel {
-    background: rgba(255,255,255,0.025);
-    border: 1px solid rgba(80,200,120,0.2);
-    border-radius: 16px;
-    padding: 2rem 2.5rem;
-    margin-top: 1rem;
-}
-.panel-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-bottom: 1.2rem;
-    padding-bottom: 0.7rem;
-}
-.panel-label.orange {
-    color: #ff8c32;
-    border-bottom: 1px solid rgba(255,140,50,0.15);
-}
-.panel-label.green {
-    color: #50c878;
-    border-bottom: 1px solid rgba(80,200,120,0.15);
-}
-
-/* Make markdown/content inside the final report clearly visible on dark background */
-.report-panel .report-markdown {
-    color: #ffffff !important;
-    opacity: 1 !important;
-    filter: none !important;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.6) !important;
-}
-.report-panel .report-markdown a {
-    color: #ff8c32 !important;
-}
-.report-panel .report-markdown h1,
-.report-panel .report-markdown h2,
-.report-panel .report-markdown h3,
-.report-panel .report-markdown h4,
-.report-panel .report-markdown h5,
-.report-panel .report-markdown h6 {
-    color: #ffffff !important;
-    font-weight: 700 !important;
-}
-.report-panel .report-markdown p,
-.report-panel .report-markdown li {
-    color: #ffffff !important;
-    opacity: 1 !important;
-}
-.report-panel .report-markdown code,
-.report-panel .report-markdown pre {
-    color: #f6f2e9 !important;
-    background: rgba(0,0,0,0.25) !important;
-}
-
-/* Critic feedback styling: make content bright and readable */
-.feedback-panel {
-    background: rgba(0,0,0,0.02);
-}
-.feedback-panel .feedback-markdown {
-    color: #ffffff !important;
-    opacity: 1 !important;
-}
-.feedback-panel .feedback-markdown a { color: #50c878 !important; }
-.feedback-panel .feedback-markdown p, .feedback-panel .feedback-markdown li { color: #ffffff !important; }
-
-/* ── Progress text ── */
-.stSpinner > div { color: #ff8c32 !important; }
-
-/* ── Expander ── */
-details summary {
-    font-family: 'DM Mono', monospace !important;
-    font-size: 0.75rem !important;
-    color: #a09890 !important;
-    letter-spacing: 0.1em !important;
-    cursor: pointer;
-}
-
-/* ── Section heading ── */
-.section-heading {
-    font-family: 'Syne', sans-serif;
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: #f0ebe0;
-    margin: 2rem 0 1rem;
-}
-
-/* ── Toast-style notice ── */
-.notice {
-    font-family: 'DM Mono', monospace;
-    font-size: 0.72rem;
-    color: #605850;
+    padding: 1.25rem;
     text-align: center;
-    margin-top: 3rem;
-    letter-spacing: 0.08em;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-</style>
-""", unsafe_allow_html=True)
+.metric-card-glow:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.1);
+}
+.metric-num {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+.metric-lbl {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-top: 0.25rem;
+}
+.source-card-modern {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(226, 232, 240, 0.15);
+    border-radius: 12px;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+}
+.badge-success {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.badge-error {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+.domain-code {
+    background: rgba(37, 99, 235, 0.08);
+    color: #2563eb;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+</style>""",
+    unsafe_allow_html=True,
+)
 
+# Sidebar System Configuration & Status
+with st.sidebar:
+    st.markdown("### ⚡ ResearchMind Platform")
+    st.caption("Enterprise Autonomous Multi-Agent AI System")
+    st.markdown("---")
 
-# ── Helper: render a step card ────────────────────────────────────────────────
-def step_card(num: str, title: str, state: str, desc: str = ""):
-    status_map = {
-        "waiting": ("WAITING", "status-waiting"),
-        "running": ("● RUNNING", "status-running"),
-        "done":    ("✓ DONE",   "status-done"),
-    }
-    label, cls = status_map.get(state, ("", ""))
-    card_cls = {"running": "active", "done": "done"}.get(state, "")
-    st.markdown(f"""
-    <div class="step-card {card_cls}">
-        <div class="step-header">
-            <span class="step-num">{num}</span>
-            <span class="step-title">{title}</span>
-            <span class="step-status {cls}">{label}</span>
-        </div>
-        {"<div style='font-size:0.82rem;color:#706860;margin-top:0.3rem;'>"+desc+"</div>" if desc else ""}
-    </div>
-    """, unsafe_allow_html=True)
+    st.subheader("🔑 API Service Credentials")
+    tavily_key = os.getenv("TAVILY_API_KEY")
+    google_key = os.getenv("GOOGLE_API_KEY")
 
-
-# ── Session state init ────────────────────────────────────────────────────────
-for key in ("results", "running", "done"):
-    if key not in st.session_state:
-        st.session_state[key] = {} if key == "results" else False
-
-
-# ── Hero ──────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="hero">
-    <div class="hero-eyebrow">Multi-Agent AI System</div>
-    <h1>Research<span>Mind</span></h1>
-    <p class="hero-sub">
-        Four specialized AI agents collaborate — searching, scraping, writing,
-        and critiquing — to deliver a polished research report on any topic.
-    </p>
-</div>
-<div class="divider"></div>
-""", unsafe_allow_html=True)
-
-
-# ── Layout: input left, pipeline right ───────────────────────────────────────
-col_input, col_spacer, col_pipeline = st.columns([5, 0.5, 4])
-
-with col_input:
-    st.markdown('<div class="input-card">', unsafe_allow_html=True)
-    topic = st.text_input(
-        "Research Topic",
-        placeholder="e.g. Quantum computing breakthroughs in 2025",
-        key="topic_input",
-        label_visibility="visible",
-    )
-    run_btn = st.button("⚡  Run Research Pipeline", use_container_width=True)
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # Example chips
-    st.markdown("""
-    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1.5rem;">
-        <span style="font-family:'DM Mono',monospace;font-size:0.68rem;color:#605850;letter-spacing:0.1em;">TRY →</span>
-    """, unsafe_allow_html=True)
-    examples = ["LLM agents 2025", "CRISPR gene editing", "Fusion energy progress"]
-    for ex in examples:
-        st.markdown(f"""
-        <span style="
-            background:rgba(255,255,255,0.04);
-            border:1px solid rgba(255,255,255,0.08);
-            border-radius:6px;
-            padding:0.25rem 0.7rem;
-            font-size:0.75rem;
-            color:#a09890;
-            font-family:'DM Sans',sans-serif;
-            cursor:default;
-        ">{ex}</span>
-        """, unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with col_pipeline:
-    st.markdown('<div class="section-heading">Pipeline</div>', unsafe_allow_html=True)
-
-    r = st.session_state.results
-    done = st.session_state.done
-
-    def s(step):
-        if not r:
-            return "waiting"
-        steps = ["search", "reader", "writer"]
-        idx = steps.index(step)
-        completed = list(r.keys())
-        # figure out which steps are done
-        if step in r:
-            return "done"
-        # which step is running now (first not in r)
-        if st.session_state.running:
-            for i, k in enumerate(steps):
-                if k not in r:
-                    return "running" if k == step else "waiting"
-        return "waiting"
-
-    step_card("01", "Search Agent",  s("search"), "Gathers recent web information")
-    step_card("02", "Reader Agent",  s("reader"), "Scrapes & extracts deep content")
-    step_card("03", "Writer Chain",  s("writer"), "Drafts the full research report")
-
-
-# ── Run pipeline ──────────────────────────────────────────────────────────────
-if run_btn:
-    if not topic.strip():
-        st.warning("Please enter a research topic first.")
-    else:
-        st.session_state.results = {}
-        st.session_state.running = True
-        st.session_state.done = False
-        st.rerun()
-
-if st.session_state.running and not st.session_state.done:
-    results = {}
-    topic_val = st.session_state.topic_input
-
-    # ── Step 1: Search ──
-    with st.spinner("🔍  Search Agent is working…"):
-        search_agent = build_search_agent()
-        sr = search_agent(f"Find recent, reliable and detailed information about: {topic_val}")
-        results["search"] = sr
-        st.session_state.results = dict(results)
-    st.rerun() if False else None   # keep inline for now
-
-    # ── Step 2: Reader ──
-    with st.spinner("📄  Reader Agent is scraping top resources…"):
-        reader_agent = build_reader_agent()
-        # Extract first URL from search results if available
-        urls = [line.split("URL: ")[1].split("\n")[0] for line in results['search'].split("\n") if "URL: " in line]
-        if urls:
-            rr = reader_agent(urls[0])
+    col_api1, col_api2 = st.columns(2)
+    with col_api1:
+        if tavily_key:
+            st.success("Tavily API\nConnected")
         else:
-            rr = "No URLs found in search results"
-        results["reader"] = rr
-        st.session_state.results = dict(results)
+            st.error("Tavily API\nMissing")
+    with col_api2:
+        if google_key:
+            st.success("Gemini API\nConnected")
+        else:
+            st.error("Gemini API\nMissing")
 
-    # ── Step 3: Writer (1 Gemini call, offline fallback if quota exceeded) ──
-    with st.spinner("✍️  Writer is drafting the report…"):
-        research_combined = (
-            f"SEARCH RESULTS:\n{results['search']}\n\n"
-            f"DETAILED SCRAPED CONTENT:\n{results['reader']}"
-        )
-        results["writer"] = generate_report(topic_val, research_combined)
-        st.session_state.results = dict(results)
+    st.markdown("---")
+    st.subheader("⚙️ Autonomous Agent Controls")
+    depth_option = st.radio(
+        "Research Depth Strategy",
+        options=["Fast", "Balanced", "Deep"],
+        index=1,
+        help="Fast (1-2 search queries), Balanced (3 search queries), Deep (4+ search queries & comprehensive analysis)",
+    )
 
-    st.session_state.running = False
-    st.session_state.done = True
-    st.rerun()
+    st.markdown("---")
+    st.subheader("🧹 System Maintenance")
+    if st.button("Clear Report Cache", use_container_width=True):
+        clear_cache()
+        st.toast("Local report cache cleared successfully!", icon="🧹")
 
+    st.markdown("---")
+    st.caption("Engine: Tavily Search • Gemini AI • 4-Agent Pipeline")
 
-# ── Results display ───────────────────────────────────────────────────────────
-r = st.session_state.results
-
-if r:
-    st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
-    st.markdown('<div class="section-heading">Results</div>', unsafe_allow_html=True)
-
-    # Raw outputs in expanders
-    if "search" in r:
-        with st.expander("🔍 Search Results (raw)", expanded=False):
-            st.markdown(f'<div class="result-panel"><div class="result-panel-title">Search Agent Output</div>'
-                        f'<div class="result-content">{r["search"]}</div></div>', unsafe_allow_html=True)
-
-    if "reader" in r:
-        with st.expander("📄 Scraped Content (raw)", expanded=False):
-            st.markdown(f'<div class="result-panel"><div class="result-panel-title">Reader Agent Output</div>'
-                        f'<div class="result-content">{r["reader"]}</div></div>', unsafe_allow_html=True)
-
-    # Final report
-    if "writer" in r:
-        # Render the final report inside the report-panel and ensure styles apply.
-        # Convert common Markdown constructs to HTML (simple, robust converter)
-        import html as _html
-
-        def _simple_md_to_html(md_text: str) -> str:
-            lines = md_text.splitlines()
-            out = []
-            in_ul = False
-            in_ol = False
-            for raw in lines:
-                line = raw.rstrip()
-                if not line:
-                    if in_ul:
-                        out.append('</ul>')
-                        in_ul = False
-                    if in_ol:
-                        out.append('</ol>')
-                        in_ol = False
-                    continue
-                s = line.lstrip()
-                # headings
-                if s.startswith('###### '):
-                    out.append(f"<h6>{_html.escape(s[7:])}</h6>")
-                elif s.startswith('##### '):
-                    out.append(f"<h5>{_html.escape(s[6:])}</h5>")
-                elif s.startswith('#### '):
-                    out.append(f"<h4>{_html.escape(s[5:])}</h4>")
-                elif s.startswith('### '):
-                    out.append(f"<h3>{_html.escape(s[4:])}</h3>")
-                elif s.startswith('## '):
-                    out.append(f"<h2>{_html.escape(s[3:])}</h2>")
-                elif s.startswith('# '):
-                    out.append(f"<h1>{_html.escape(s[2:])}</h1>")
-                # unordered list
-                elif s.startswith('- ') or s.startswith('* '):
-                    if not in_ul:
-                        out.append('<ul>')
-                        in_ul = True
-                    out.append(f"<li>{_html.escape(s[2:]).strip()}</li>")
-                # ordered list
-                elif _re := __import__('re').match(r'^(\d+)\.\s+(.*)', s):
-                    if not in_ol:
-                        out.append('<ol>')
-                        in_ol = True
-                    out.append(f"<li>{_html.escape(_re.group(2)).strip()}</li>")
-                else:
-                    out.append(f"<p>{_html.escape(s)}</p>")
-            if in_ul:
-                out.append('</ul>')
-            if in_ol:
-                out.append('</ol>')
-            return '\n'.join(out)
-
-        html_content = _simple_md_to_html(r["writer"]) if isinstance(r["writer"], str) else _html.escape(str(r["writer"]))
-
-        st.markdown(f"""
-        <div class="report-panel">
-            <div class="panel-label orange">📝 Final Research Report</div>
-            <div class="report-markdown">{html_content}</div>
+# Hero Header Component
+st.markdown(
+    """
+    <div class="hero-container">
+        <div class="hero-title">ResearchMind AI</div>
+        <div class="hero-subtitle">High-efficiency, production-ready research platform orchestrated by 4 specialized autonomous AI agents.</div>
+        <div class="agent-pill-container">
+            <span class="agent-pill">🤖 <b>Agent 1:</b> Planner</span>
+            <span class="agent-pill">🔍 <b>Agent 2:</b> Multi-Extractor</span>
+            <span class="agent-pill">📝 <b>Agent 3:</b> Gemini Synthesizer</span>
+            <span class="agent-pill">📊 <b>Agent 4:</b> Quality Auditor</span>
         </div>
-        """, unsafe_allow_html=True)
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
-        # Download
-        st.download_button(
-            label="⬇  Download Report (.md)",
-            data=r["writer"],
-            file_name=f"research_report_{int(time.time())}.md",
-            mime="text/markdown",
+# Topic Entry Bar
+col_topic, col_submit = st.columns([4, 1])
+with col_topic:
+    topic_input = st.text_input(
+        "Research Topic",
+        placeholder="Enter research topic (e.g. Next-generation solid-state battery tech 2026)",
+        label_visibility="collapsed",
+    )
+with col_submit:
+    submit_btn = st.button("🚀 Start Research", type="primary", use_container_width=True)
+
+# Main Research Handler
+if submit_btn:
+    if not topic_input.strip():
+        st.warning("Please enter a research topic to proceed.")
+    elif not tavily_key or not google_key:
+        st.error(
+            "Missing required API credentials. Ensure `TAVILY_API_KEY` and `GOOGLE_API_KEY` are set in `.env`."
+        )
+    else:
+        try:
+            status_box = st.status("Initializing Autonomous 4-Agent Pipeline...", expanded=True)
+
+            def log_progress(message: str) -> None:
+                status_box.write(message)
+
+            results = run_research_pipeline(
+                topic=topic_input.strip(), depth=depth_option, progress_callback=log_progress
+            )
+            st.session_state.results = results
+            status_box.update(
+                label="🎉 Multi-Agent Research Completed Successfully!", state="complete", expanded=False
+            )
+        except Exception as error:
+            st.error(f"❌ Pipeline Execution Failed: {error}")
+
+# Deliverables Dashboard Display
+results = st.session_state.get("results")
+if results:
+    st.markdown("---")
+    audit = results.get("audit", {})
+
+    # Top Metric Dashboard Cards
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(
+            f'<div class="metric-card-glow"><div class="metric-num">{audit.get("total_sources_scraped", 0)}</div><div class="metric-lbl">Sources Analyzed</div></div>',
+            unsafe_allow_html=True,
+        )
+    with c2:
+        st.markdown(
+            f'<div class="metric-card-glow"><div class="metric-num">{audit.get("word_count", 0)}</div><div class="metric-lbl">Report Words</div></div>',
+            unsafe_allow_html=True,
+        )
+    with c3:
+        st.markdown(
+            f'<div class="metric-card-glow"><div class="metric-num">{audit.get("read_time_minutes", 0)}m</div><div class="metric-lbl">Reading Time</div></div>',
+            unsafe_allow_html=True,
+        )
+    with c4:
+        st.markdown(
+            f'<div class="metric-card-glow"><div class="metric-num">{audit.get("quality_score", 0)}/100</div><div class="metric-lbl">Audit Score</div></div>',
+            unsafe_allow_html=True,
         )
 
-# ── Footer ────────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="notice">
-    ResearchMind · Powered by LangChain multi-agent pipeline · Built with Streamlit
-</div>
-""", unsafe_allow_html=True)
+    st.markdown("###")
+
+    # Deliverables Tabs
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "📄 Executive Report",
+            "🤖 Agent Workflow Audit",
+            "🌐 Source Matrix",
+            "📊 Performance Analytics",
+            "💾 Export Hub",
+        ]
+    )
+
+    with tab1:
+        st.markdown(results["writer"])
+
+    with tab2:
+        st.subheader("Agent 1: Planner Queries Formulated")
+        for q in results.get("queries", []):
+            st.info(f"🔎 Query: {q}")
+
+        st.markdown("---")
+        st.subheader("Agent 4: Auditor Verification Summary")
+        col_aud1, col_aud2 = st.columns(2)
+        with col_aud1:
+            st.metric("Cited Sources in Report", audit.get("cited_source_count", 0))
+            st.metric("Successful Web Scrapes", audit.get("successful_sources", 0))
+        with col_aud2:
+            st.metric("Audit Passed Status", "PASSED ✅" if audit.get("audit_passed") else "ATTENTION ⚠️")
+            st.metric("Total Scraped Sources", audit.get("total_sources_scraped", 0))
+
+    with tab3:
+        st.subheader("Extracted Source Records")
+        sources = results.get("sources", [])
+        if not sources:
+            st.info("No sources recorded.")
+        else:
+            for idx, src in enumerate(sources, 1):
+                is_ok = src.get("status") == "success"
+                badge_html = (
+                    '<span class="badge-success">HTTP 200 SUCCESS</span>'
+                    if is_ok
+                    else '<span class="badge-error">FETCH ERROR</span>'
+                )
+                domain = urlparse(src.get("url", "")).netloc or "web"
+
+                st.markdown(
+                    f"""
+                    <div class="source-card-modern">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <strong style="font-size: 1.05rem;">[{idx}] {src.get('title', 'Untitled')}</strong>
+                            {badge_html}
+                        </div>
+                        <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 0.6rem;">
+                            Domain: <span class="domain-code">{domain}</span> | <a href="{src.get('url')}" target="_blank">View Direct Source</a>
+                        </div>
+                        <div style="font-size: 0.9rem; color: #475569; font-style: italic;">
+                            "{src.get('snippet', 'No snippet available.')[:280]}..."
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    with tab4:
+        st.subheader("System Performance & Audit Metadata")
+        st.json(audit)
+
+    with tab5:
+        st.subheader("Export Final Research Deliverables")
+        report_text = results["writer"]
+
+        # Pre-compute HTML body replacement to avoid f-string backslash syntax errors in Python <3.12
+        formatted_html_body = report_text.replace("\n", "<br>")
+
+        json_export = json.dumps(results, indent=2, ensure_ascii=False)
+        html_export = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Research Report - {results.get('topic')}</title>
+    <style>
+        body {{ font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; max-width: 850px; margin: 2rem auto; padding: 0 1.5rem; color: #1e293b; background: #f8fafc; }}
+        h1, h2, h3 {{ color: #0f172a; }}
+        code {{ background: #e2e8f0; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: monospace; }}
+        a {{ color: #2563eb; text-decoration: none; }}
+        a:hover {{ text-decoration: underline; }}
+    </style>
+</head>
+<body>
+    {formatted_html_body}
+</body>
+</html>"""
+
+        ex_col1, ex_col2, ex_col3 = st.columns(3)
+        with ex_col1:
+            st.download_button(
+                "📥 Export Markdown (.md)",
+                data=report_text,
+                file_name=f"research_report_{results.get('topic', 'deliverable')}.md",
+                mime="text/markdown",
+                use_container_width=True,
+            )
+        with ex_col2:
+            st.download_button(
+                "📥 Export JSON Data (.json)",
+                data=json_export,
+                file_name=f"research_data_{results.get('topic', 'deliverable')}.json",
+                mime="application/json",
+                use_container_width=True,
+            )
+        with ex_col3:
+            st.download_button(
+                "📥 Export Printable HTML (.html)",
+                data=html_export,
+                file_name=f"research_report_{results.get('topic', 'deliverable')}.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+
+
