@@ -2,11 +2,30 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-from researchmind.agents import AuditorAgent, ExtractorAgent, PlannerAgent
+from researchmind.agents import AuditorAgent, ExtractorAgent, FactCheckerAgent, PlannerAgent
 from researchmind.tools import scrape_url, scrape_urls_concurrent
 
 
 class AgentsTests(unittest.TestCase):
+    def test_fact_checker_agent(self):
+        fact_checker = FactCheckerAgent()
+        report = """# Research Report: Quantum Computing
+- Qubits enable quantum superposition and entanglement in computational space.
+- Advanced fault-tolerant quantum algorithms are actively being researched worldwide.
+"""
+        sources = [
+            {
+                "url": "https://quantum.com",
+                "content": "Qubits enable quantum superposition and entanglement in computational algorithms worldwide.",
+                "snippet": "Advanced quantum computing systems",
+            }
+        ]
+        res = fact_checker.verify_facts(report, sources)
+        self.assertIn("verifiability_score", res)
+        self.assertGreater(res["verifiability_score"], 50)
+        self.assertTrue(res["fact_check_passed"])
+        self.assertGreater(len(res["claim_evaluations"]), 0)
+
     def test_planner_agent_queries(self):
         planner = PlannerAgent()
         fast_queries = planner.plan_research("Quantum Computing", depth="Fast")

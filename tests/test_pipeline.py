@@ -33,9 +33,14 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["topic"], "Test Topic")
         self.assertIn("writer", result)
         self.assertIn("audit", result)
+        self.assertIn("fact_check", result)
+        self.assertIn("telemetry", result)
+        self.assertIn("dag_mermaid", result)
+        self.assertEqual(len(result["telemetry"]), 5)
         self.assertGreater(len(progress_logs), 0)
         self.assertEqual(result["audit"]["total_sources_scraped"], 1)
 
 
 if __name__ == "__main__":
     unittest.main()
+

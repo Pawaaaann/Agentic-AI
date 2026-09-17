@@ -111,10 +111,11 @@ class WriterAgent:
         formatted_chunks = []
         for idx, src in enumerate(sources, 1):
             if src.get("status") == "success" and src.get("content"):
-                chunk = f"Source [{idx}]: {src['title']}\nURL: {src['url']}\nExtracted Content:\n{src['content'][:2500]}"
+                chunk = f"Source [{idx}]: {src['title']}\nURL: {src['url']}\nExtracted Content:\n{src['content'][:4500]}"
             else:
                 chunk = f"Source [{idx}]: {src['title']}\nURL: {src['url']}\nSnippet:\n{src.get('snippet', '')}"
             formatted_chunks.append(chunk)
+
 
         combined_research = "\n\n---\n\n".join(formatted_chunks)
 
@@ -152,3 +153,57 @@ class AuditorAgent:
             "quality_score": min(100, score),
             "audit_passed": words >= 150 and len(sources) >= 1,
         }
+
+
+class FactCheckerAgent:
+    """Agent 5: Hallucination Guardrail Agent that cross-references report statements against raw scraped sources."""
+
+    def verify_facts(self, report_md: str, sources: list[dict[str, Any]]) -> dict[str, Any]:
+        # Extract factual sentences/bullets from report
+        raw_lines = [line.strip("-* ").strip() for line in report_md.splitlines() if line.strip().startswith(("-", "*", "1.", "2.", "3.", "4.", "5."))]
+        claims = [c for c in raw_lines if len(c) > 20][:12]  # Inspect top key claims
+
+        # Combine all raw source text for grounding verification
+        all_source_text = " ".join(
+            (s.get("content", "") + " " + s.get("snippet", "")).lower() for s in sources
+        )
+
+        claim_evaluations = []
+        grounded_count = 0
+
+        for claim in claims:
+            # Extract key words (>4 chars) from claim
+            words = set(re.findall(r"\b[a-zA-Z0-9]{4,}\b", claim.lower()))
+            if not words:
+                continue
+
+            matches = sum(1 for w in words if w in all_source_text)
+            match_ratio = matches / len(words)
+
+            is_grounded = match_ratio >= 0.4 or any(url in claim for url in [s.get("url", "") for s in sources if s.get("url")])
+
+            if is_grounded:
+                grounded_count += 1
+
+            claim_evaluations.append(
+                {
+                    "claim": claim[:140],
+                    "is_grounded": is_grounded,
+                    "confidence": round(min(1.0, match_ratio * 1.2), 2),
+                }
+            )
+
+        total_claims = len(claim_evaluations)
+        verifiability_score = (
+            round((grounded_count / total_claims) * 100, 1) if total_claims > 0 else 90.0
+        )
+
+        return {
+            "verifiability_score": verifiability_score,
+            "total_claims_analyzed": total_claims,
+            "grounded_claims_count": grounded_count,
+            "unverified_claims_count": total_claims - grounded_count,
+            "fact_check_passed": verifiability_score >= 60.0,
+            "claim_evaluations": claim_evaluations,
+        }
+

@@ -1,4 +1,4 @@
-"""Streamlit entry point for ResearchMind - Production Multi-Agent Research System."""
+"""Streamlit entry point for ResearchMind - Enterprise 5-Agent AI Research System."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from urllib.parse import urlparse
 import streamlit as st
 
 from researchmind.pipeline import run_research_pipeline
-from researchmind.services import clear_cache
+from researchmind.services import answer_followup_question, clear_cache
 
 # Page configuration
 st.set_page_config(
-    page_title="ResearchMind • Multi-Agent Autonomous AI Engine",
+    page_title="ResearchMind • Autonomous 5-Agent AI Platform",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -82,14 +82,14 @@ code, pre {
     box-shadow: 0 10px 25px -5px rgba(37, 99, 235, 0.1);
 }
 .metric-num {
-    font-size: 2.2rem;
+    font-size: 2rem;
     font-weight: 800;
     background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 .metric-lbl {
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 700;
     color: #64748b;
     text-transform: uppercase;
@@ -135,10 +135,10 @@ code, pre {
 # Sidebar System Configuration & Status
 with st.sidebar:
     st.markdown("### ⚡ ResearchMind Platform")
-    st.caption("Enterprise Autonomous Multi-Agent AI System")
+    st.caption("Enterprise Autonomous 5-Agent AI Platform")
     st.markdown("---")
 
-    st.subheader("🔑 API Service Credentials")
+    st.subheader("🔑 API Credentials")
     tavily_key = os.getenv("TAVILY_API_KEY")
     google_key = os.getenv("GOOGLE_API_KEY")
 
@@ -155,12 +155,12 @@ with st.sidebar:
             st.error("Gemini API\nMissing")
 
     st.markdown("---")
-    st.subheader("⚙️ Autonomous Agent Controls")
+    st.subheader("⚙️ Agent Controls")
     depth_option = st.radio(
-        "Research Depth Strategy",
+        "Research Strategy",
         options=["Fast", "Balanced", "Deep"],
         index=1,
-        help="Fast (1-2 search queries), Balanced (3 search queries), Deep (4+ search queries & comprehensive analysis)",
+        help="Fast (1-2 queries), Balanced (3 queries), Deep (4+ queries & deep study)",
     )
 
     st.markdown("---")
@@ -170,22 +170,21 @@ with st.sidebar:
         st.toast("Local report cache cleared successfully!", icon="🧹")
 
     st.markdown("---")
-    st.caption("Engine: Tavily Search • Gemini AI • 4-Agent Pipeline")
+    st.caption("Engine: Tavily API • Gemini AI • 5-Agent DAG Engine")
 
 # Hero Header Component
 st.markdown(
-    """
-    <div class="hero-container">
+    """<div class="hero-container">
         <div class="hero-title">ResearchMind AI</div>
-        <div class="hero-subtitle">High-efficiency, production-ready research platform orchestrated by 4 specialized autonomous AI agents.</div>
+        <div class="hero-subtitle">Production multi-agent platform orchestrated by 5 specialized autonomous AI agents with fact verification & interactive chat.</div>
         <div class="agent-pill-container">
             <span class="agent-pill">🤖 <b>Agent 1:</b> Planner</span>
             <span class="agent-pill">🔍 <b>Agent 2:</b> Multi-Extractor</span>
             <span class="agent-pill">📝 <b>Agent 3:</b> Gemini Synthesizer</span>
-            <span class="agent-pill">📊 <b>Agent 4:</b> Quality Auditor</span>
+            <span class="agent-pill">📊 <b>Agent 4:</b> Auditor</span>
+            <span class="agent-pill">🛡️ <b>Agent 5:</b> Fact-Checker</span>
         </div>
-    </div>
-    """,
+    </div>""",
     unsafe_allow_html=True,
 )
 
@@ -210,7 +209,7 @@ if submit_btn:
         )
     else:
         try:
-            status_box = st.status("Initializing Autonomous 4-Agent Pipeline...", expanded=True)
+            status_box = st.status("Initializing Autonomous 5-Agent Pipeline...", expanded=True)
 
             def log_progress(message: str) -> None:
                 status_box.write(message)
@@ -219,8 +218,15 @@ if submit_btn:
                 topic=topic_input.strip(), depth=depth_option, progress_callback=log_progress
             )
             st.session_state.results = results
+            # Reset interactive chat history for new research topic
+            st.session_state.chat_history = [
+                {
+                    "role": "assistant",
+                    "content": f"Hello! I am **ResearchMind Assistant**. I have full context of the research report on **'{topic_input.strip()}'**. Ask me any follow-up questions!",
+                }
+            ]
             status_box.update(
-                label="🎉 Multi-Agent Research Completed Successfully!", state="complete", expanded=False
+                label="🎉 5-Agent Research Pipeline Completed Successfully!", state="complete", expanded=False
             )
         except Exception as error:
             st.error(f"❌ Pipeline Execution Failed: {error}")
@@ -230,9 +236,10 @@ results = st.session_state.get("results")
 if results:
     st.markdown("---")
     audit = results.get("audit", {})
+    fact_check = results.get("fact_check", {})
 
-    # Top Metric Dashboard Cards
-    c1, c2, c3, c4 = st.columns(4)
+    # Top Metric Dashboard Cards (5 Columns)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         st.markdown(
             f'<div class="metric-card-glow"><div class="metric-num">{audit.get("total_sources_scraped", 0)}</div><div class="metric-lbl">Sources Analyzed</div></div>',
@@ -245,12 +252,17 @@ if results:
         )
     with c3:
         st.markdown(
-            f'<div class="metric-card-glow"><div class="metric-num">{audit.get("read_time_minutes", 0)}m</div><div class="metric-lbl">Reading Time</div></div>',
+            f'<div class="metric-card-glow"><div class="metric-num">{audit.get("read_time_minutes", 0)}m</div><div class="metric-lbl">Est. Read Time</div></div>',
             unsafe_allow_html=True,
         )
     with c4:
         st.markdown(
             f'<div class="metric-card-glow"><div class="metric-num">{audit.get("quality_score", 0)}/100</div><div class="metric-lbl">Audit Score</div></div>',
+            unsafe_allow_html=True,
+        )
+    with c5:
+        st.markdown(
+            f'<div class="metric-card-glow"><div class="metric-num">{fact_check.get("verifiability_score", 0)}%</div><div class="metric-lbl">Verifiability Score</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -259,10 +271,10 @@ if results:
     # Deliverables Tabs
     tab1, tab2, tab3, tab4, tab5 = st.tabs(
         [
-            "📄 Executive Report",
-            "🤖 Agent Workflow Audit",
+            "📄 Executive & Detailed Report",
+            "🤖 Execution DAG & Telemetry",
+            "🛡️ Fact-Checker Audit",
             "🌐 Source Matrix",
-            "📊 Performance Analytics",
             "💾 Export Hub",
         ]
     )
@@ -270,22 +282,89 @@ if results:
     with tab1:
         st.markdown(results["writer"])
 
+        st.markdown("---")
+        st.subheader("💬 Ask ResearchMind Assistant (Interactive AI Bot)")
+        st.caption("Converse interactively with the AI assistant powered by the full context of this research report.")
+
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = [
+                {
+                    "role": "assistant",
+                    "content": f"Hello! I am **ResearchMind Assistant**. I have full context of your research report on **'{results.get('topic')}'**. What would you like to know or clarify?",
+                }
+            ]
+
+        # Render message log
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        # User Input Chat Box
+        if user_prompt := st.chat_input("Ask a follow-up question on this research..."):
+            st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+            with st.chat_message("user"):
+                st.markdown(user_prompt)
+
+            with st.chat_message("assistant"):
+                with st.spinner("ResearchMind Bot is thinking..."):
+                    try:
+                        bot_reply = answer_followup_question(
+                            topic=results.get("topic", ""),
+                            report_md=results.get("writer", ""),
+                            sources=results.get("sources", []),
+                            chat_history=st.session_state.chat_history,
+                            user_question=user_prompt,
+                        )
+                    except Exception as err:
+                        bot_reply = f"Sorry, I encountered an error: {err}"
+
+                    st.markdown(bot_reply)
+                    st.session_state.chat_history.append({"role": "assistant", "content": bot_reply})
+
     with tab2:
+        st.subheader("Interactive Agent Execution DAG Flow")
+        dag_code = results.get("dag_mermaid", "")
+        st.markdown(f"```mermaid\n{dag_code}\n```")
+
+        st.markdown("---")
+        st.subheader("Agent Execution Node Telemetry")
+        telemetry_list = results.get("telemetry", [])
+        if telemetry_list:
+            for t in telemetry_list:
+                st.markdown(
+                    f"**{t['icon']} Agent {t['agent_id']}: {t['name']}** • Duration: `{t['duration_sec']}s` | Summary: *{t['summary']}*"
+                )
+
+        st.markdown("---")
         st.subheader("Agent 1: Planner Queries Formulated")
         for q in results.get("queries", []):
             st.info(f"🔎 Query: {q}")
 
-        st.markdown("---")
-        st.subheader("Agent 4: Auditor Verification Summary")
-        col_aud1, col_aud2 = st.columns(2)
-        with col_aud1:
-            st.metric("Cited Sources in Report", audit.get("cited_source_count", 0))
-            st.metric("Successful Web Scrapes", audit.get("successful_sources", 0))
-        with col_aud2:
-            st.metric("Audit Passed Status", "PASSED ✅" if audit.get("audit_passed") else "ATTENTION ⚠️")
-            st.metric("Total Scraped Sources", audit.get("total_sources_scraped", 0))
-
     with tab3:
+        st.subheader("Agent 5: Fact-Checker Grounding & Hallucination Guardrail")
+        st.metric(
+            "Verifiability Score",
+            f"{fact_check.get('verifiability_score', 0)}%",
+            delta="HIGH GROUNDING" if fact_check.get("fact_check_passed") else "ATTENTION NEEDED",
+        )
+
+        col_fc1, col_fc2 = st.columns(2)
+        with col_fc1:
+            st.metric("Claims Analyzed", fact_check.get("total_claims_analyzed", 0))
+            st.metric("Grounded Claims", fact_check.get("grounded_claims_count", 0))
+        with col_fc2:
+            st.metric("Unverified Claims", fact_check.get("unverified_claims_count", 0))
+
+        st.markdown("---")
+        st.subheader("Claim-by-Claim Grounding Breakdown")
+        for claim_item in fact_check.get("claim_evaluations", []):
+            is_g = claim_item.get("is_grounded")
+            icon = "✅ GROUNDED" if is_g else "⚠️ UNVERIFIED"
+            st.markdown(
+                f"- **[{icon}]** {claim_item.get('claim')} *(Confidence: {claim_item.get('confidence')})*"
+            )
+
+    with tab4:
         st.subheader("Extracted Source Records")
         sources = results.get("sources", [])
         if not sources:
@@ -301,8 +380,7 @@ if results:
                 domain = urlparse(src.get("url", "")).netloc or "web"
 
                 st.markdown(
-                    f"""
-                    <div class="source-card-modern">
+                    f"""<div class="source-card-modern">
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                             <strong style="font-size: 1.05rem;">[{idx}] {src.get('title', 'Untitled')}</strong>
                             {badge_html}
@@ -313,22 +391,14 @@ if results:
                         <div style="font-size: 0.9rem; color: #475569; font-style: italic;">
                             "{src.get('snippet', 'No snippet available.')[:280]}..."
                         </div>
-                    </div>
-                    """,
+                    </div>""",
                     unsafe_allow_html=True,
                 )
-
-    with tab4:
-        st.subheader("System Performance & Audit Metadata")
-        st.json(audit)
 
     with tab5:
         st.subheader("Export Final Research Deliverables")
         report_text = results["writer"]
-
-        # Pre-compute HTML body replacement to avoid f-string backslash syntax errors in Python <3.12
         formatted_html_body = report_text.replace("\n", "<br>")
-
         json_export = json.dumps(results, indent=2, ensure_ascii=False)
         html_export = f"""<!DOCTYPE html>
 <html>
@@ -373,5 +443,7 @@ if results:
                 mime="text/html",
                 use_container_width=True,
             )
+
+
 
 
